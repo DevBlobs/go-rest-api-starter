@@ -1,0 +1,51 @@
+run:
+  timeout: 2m
+  tests: true
+  skip-dirs:
+    - tools/linter  # Skip the old custom linter directory
+
+linters:
+  enable:
+    - revive       # style and readability
+    - govet        # standard check Go
+    - staticcheck  # static analyzer
+    - errcheck     # error checker
+    - gosimple     # code simplifier
+    - gofmt        # formatting
+    - goimports    # imports formatting
+    - misspell     # spelling mistakes
+    - ineffassign  # detect ineffectual assignments
+    - unused       # unused code
+    - bodyclose    # checks whether HTTP response bodies are closed
+    - gocyclo      # cyclomatic complexity
+  disable:
+    - godox        # TODO/FIXME comments
+    - lll          # line length
+    - funlen       # function length
+    - dupl         # code duplication
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: unexported-return
+        severity: warning
+        disabled: false
+      - name: unused-parameter
+        severity: warning
+        disabled: false
+
+go:
+  modules-download-mode: mod
+
+issues:
+  exclude-use-default: false
+  exclude:
+    - "error return value not checked.*Close"
+    - "should have a package comment"
+  max-same-issues: 3
+  max-issues-per-linter: 50

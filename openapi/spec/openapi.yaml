@@ -1,0 +1,826 @@
+openapi: 3.0.3
+info:
+  title: Boilerplate REST API
+  version: 1.0.0
+  description: |
+    A production-ready REST API boilerplate built with Go and Echo.
+
+    ## Authentication Overview
+
+    This API supports two authentication flows for different use cases:
+
+    ### 1. User Authentication (Authorization Code Flow)
+
+    **Use case:** Browser-based applications, interactive users
+
+    **Flow:**
+    1. Browser visits `GET /api/v1/auth/login` → redirects to WorkOS
+    2. User authenticates with WorkOS (email/password, SSO, etc.)
+    3. WorkOS redirects back to `GET /api/v1/auth/callback?code=...&state=...`
+    4. Backend exchanges code for JWT tokens via WorkOS
+    5. Access token stored in httpOnly `access_token` cookie
+    6. Subsequent requests include the cookie automatically
+
+    **Token storage:** httpOnly cookie (sent automatically by browser)
+
+    **Try it in Swagger UI:** Click "Authorize" → use OAuth2 flow
+
+    ### 2. M2M Authentication (Client Credentials Flow)
+
+    **Use case:** Service-to-service communication, background jobs, CLIs, APIs
+
+    **Flow:**
+    1. M2M application calls WorkOS `/oauth2/token` directly with client_credentials grant
+    2. WorkOS returns JWT access token (includes `org_id` claim for service accounts)
+    3. M2M application includes token in `Authorization: Bearer <token>` header
+    4. Backend validates JWT and extracts principal info
+
+    **Example:**
+    
+    Step 1: Get token from WorkOS
+    
+    ```bash
+    curl -X POST "https://<your-authkit-domain>.authkit.app/oauth2/token" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "grant_type=client_credentials" \
+      -d "client_id=<m2m_client_id>" \
+      -d "client_secret=<m2m_client_secret>" \
+      -d "scope=read:items write:items"
+     ```
+    
+    Step 2: Use token to call API
+    
+    ```bash
+    curl -H "Authorization: Bearer <access_token>" \
+      http://localhost:8080/api/v1/demo/items
+    ```
+
+    **Token storage:** In-memory or secure store, sent as Bearer header
+
+    **Note:** The backend does NOT issue M2M tokens - they come directly from WorkOS.
+
+    ## Token Validation
+
+    The backend validates ALL JWT tokens (user or M2M):
+
+    1. **Signature** - Verified against WorkOS JWKS endpoint
+    2. **Expiration** - `exp` claim must be in the future
+    3. **Issuer** - `iss` claim must match configured issuer exactly
+    4. **Audience** - `aud` claim must match ClientID (required for M2M)
+
+    No prefix matching, no partial validation - all claims must match exactly.
+
+    ## Scope-Based Authorization
+
+    Some endpoints require specific OAuth2 scopes. The token must include the required scope, otherwise the API returns `403 Forbidden`.
+
+    **How to get scopes:**
+    - **User tokens:** Scopes are determined by your WorkOS session configuration
+    - **M2M tokens:** Request scopes when calling WorkOS token endpoint: `scope=read:items write:items`
+
+    **Example scopes:**
+    - `read:items` - Read item data
+    - `write:items` - Create/modify items
+    - `admin` - Administrative access
+
+    ## Testing the API
+
+    **Option 1: Swagger UI (OAuth2 flow)**
+    1. Click "Authorize" button
+    2. Select scopes you want to request
+    3. Click "Authorize" and complete the WorkOS login
+    4. Swagger UI will automatically include the token in requests
+
+    **Option 2: Bring your own token**
+    1. Obtain a token via WorkOS (user or M2M flow)
+    2. Click "Authorize"
+    3. Enter token as `Bearer <your-token>` in the popup
+
+    **Option 3: Test with curl**
+    ```bash
+    # With Bearer token
+    curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/demo/items
+
+    # With cookie (after browser login)
+    curl --cookie "access_token=<token>" http://localhost:8080/api/v1/demo/items
+    ```
+
+    ## Protected Endpoints
+
+    All endpoints under `/api/v1` except these are protected:
+    - `/api/v1/auth/login` - Public (starts login flow)
+    - `/api/v1/auth/callback` - Public (OAuth callback)
+    - `/api/v1/auth/logout` - Public (logout)
+    - `/api/v1/auth/token` - Public (token exchange for OAuth2 clients)
+
+    Protected endpoints accept authentication via:
+    - `Authorization: Bearer <token>` header (M2M or manual testing)
+    - `access_token` cookie (automatic after browser login)
+
+    ## Error Responses
+
+    - `401 Unauthorized` - Missing/invalid token, token expired
+    - `403 Forbidden` - Valid token but insufficient scope for the endpoint
+
+    ## General Notes
+
+    - Timestamps are RFC3339 (UTC)
+    - IDs are UUIDs where applicable
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: auth
+    description: Authentication & user session endpoints
+  - name: items
+    description: Items management endpoints
+  - name: demo
+    description: Demo endpoints showcasing scope-based authorization
+  - name: misc
+    description: Miscellaneous endpoints
+
+paths:
+  /health:
+    get:
+      tags: [misc]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/auth/login:
+    get:
+      tags: [auth]
+      summary: Start login (User Authentication Flow)
+      description: |
+        **Initiates browser-based authentication with WorkOS.**
+
+        This is the entry point for the Authorization Code flow used by browser applications.
+
+        **Flow:**
+        1. Browser visits this endpoint
+        2. Backend generates a secure state token (CSRF protection)
+        3. Browser redirects to WorkOS login page
+        4. User authenticates (email/password, SSO, magic link, etc.)
+        5. WorkOS redirects back to `/api/v1/auth/callback` with authorization code
+
+        **Usage:**
+        - Frontend apps: Redirect user's browser to this endpoint
+        - Direct access: Opening this URL in a browser will start the login flow
+
+        **After successful callback:**
+        - JWT access token stored in httpOnly `access_token` cookie
+        - Refresh token stored in httpOnly `refresh_token` cookie
+        - Cookies are automatically sent with subsequent requests
+
+        **Note:** M2M applications should NOT use this flow. Use client_credentials directly with WorkOS.
+      operationId: authLogin
+      responses:
+        '302':
+          description: Redirect to WorkOS authorization URL
+          headers:
+            Location:
+              description: WorkOS authorization URL
+              schema:
+                type: string
+        '500':
+          description: Internal error (e.g., state generation failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/callback:
+    get:
+      tags: [auth]
+      summary: OAuth callback (User Authentication Flow)
+      description: |
+        **Handles WorkOS callback after user authentication.**
+
+        This endpoint is called by WorkOS after the user completes authentication.
+
+        **Flow:**
+        1. WorkOS redirects here with `code` and `state` parameters
+        2. Backend validates state (CSRF protection)
+        3. Backend exchanges authorization code for JWT tokens via WorkOS API
+        4. Tokens stored in httpOnly cookies
+        5. Browser redirected to application frontend
+
+        **Parameters:**
+        - `code` (required): Authorization code from WorkOS
+        - `state` (required): Signed JWT state token for CSRF protection
+
+        **After this endpoint:**
+        - User is logged in
+        - Cookies are set with access/refresh tokens
+        - Browser redirected to `AUTH_BASE_URL` (configured via environment)
+      operationId: authCallback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from WorkOS
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Signed JWT state token (CSRF protection)
+      responses:
+        '302':
+          description: Redirect to application base URL (login complete)
+        '400':
+          description: Missing/invalid parameters or invalid state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Token exchange failed with WorkOS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout
+      description: |
+        **Logs out the current user by clearing auth cookies.**
+
+        **Flow:**
+        1. Deletes `access_token` and `refresh_token` cookies
+        2. Optionally redirects to WorkOS logout to terminate the WorkOS session
+
+        **Parameters:**
+        - `session_id` (optional): Extracted from token or provided as query param
+        - `return_to` (optional): Where to redirect after WorkOS logout
+
+        **Note:** This only clears local cookies. For complete logout, the redirect to WorkOS
+        terminates the WorkOS session, invalidating refresh tokens.
+      operationId: authLogout
+      parameters:
+        - name: session_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: WorkOS session ID (extracted from token if not provided)
+        - name: return_to
+          in: query
+          required: false
+          schema:
+            type: string
+          description: URL to redirect to after WorkOS logout
+      responses:
+        '204':
+          description: Cookies cleared (no redirect available)
+        '302':
+          description: Redirect to WorkOS logout
+        '401':
+          description: Unauthorized (not logged in)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/token:
+    post:
+      tags: [auth]
+      summary: OAuth2 token endpoint (Authorization Code Exchange)
+      description: |
+        **OAuth2-compliant token endpoint for exchanging authorization codes.**
+
+        This endpoint implements the OAuth2 Authorization Code flow and is used by:
+        - Swagger UI's "Authorize" feature
+        - Standard OAuth2 clients
+        - Mobile/native apps that can securely store the `client_secret`
+
+        **Important:** This is for **exchanging authorization codes**, NOT for M2M tokens.
+        For M2M authentication, call WorkOS `/oauth2/token` directly with `client_credentials` grant.
+
+        **Flow:**
+        1. Client obtained authorization code from WorkOS (via user login)
+        2. Client sends code to this endpoint with state validation
+        3. Backend validates state (CSRF protection)
+        4. Backend exchanges code for tokens via WorkOS API
+        5. Returns tokens to client
+
+        **Request body (application/x-www-form-urlencoded):**
+        - `grant_type`: Must be "authorization_code"
+        - `code`: Authorization code from WorkOS callback
+        - `state`: Signed JWT state token for CSRF protection
+        - `redirect_uri`: Optional, must match authorization request
+
+        **Response:** JSON with `access_token`, `refresh_token`, `expires_in`, `token_type`
+      operationId: authToken
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, code, state]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code]
+                code:
+                  type: string
+                  description: Authorization code from WorkOS
+                redirect_uri:
+                  type: string
+                  description: Redirect URI used in authorization request
+                state:
+                  type: string
+                  description: Signed JWT state token for CSRF protection
+      responses:
+        '200':
+          description: Token response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request (invalid state, unsupported grant type)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Token exchange failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user
+      description: Returns the authenticated user's information.
+      operationId: authMe
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/demo/items:
+    post:
+      tags: [demo]
+      summary: Create demo item (scope-protected)
+      description: |
+        Creates a mock item for demonstrating scope-based authorization.
+        Requires the `write:items` scope. Returns 403 Forbidden if the token lacks this scope.
+      operationId: createDemoItem
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      responses:
+        '201':
+          description: Mock item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoItemResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient scope (requires `write:items`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [demo]
+      summary: List demo items (scope-protected)
+      description: |
+        Returns a list of mock items for demonstrating scope-based authorization.
+        Requires the `read:items` scope. Returns 403 Forbidden if the token lacks this scope.
+      operationId: listDemoItems
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      responses:
+        '200':
+          description: List of mock items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoItemsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient scope (requires `read:items`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/demo/admin/stats:
+    get:
+      tags: [demo]
+      summary: Get admin stats (scope-protected)
+      description: |
+        Returns mock admin statistics for demonstrating scope-based authorization.
+        Requires the `admin` scope. Returns 403 Forbidden if the token lacks this scope.
+      operationId: getAdminStats
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      responses:
+        '200':
+          description: Admin statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient scope (requires `admin`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/items:
+    post:
+      tags: [items]
+      summary: Create item
+      description: Creates a new item.
+      operationId: createItem
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [items]
+      summary: List items
+      description: Returns a list of all items.
+      operationId: listItems
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      responses:
+        '200':
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/items/{id}:
+    get:
+      tags: [items]
+      summary: Get item
+      description: Returns a single item by ID.
+      operationId: getItem
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [items]
+      summary: Delete item
+      description: Deletes an item by ID.
+      operationId: deleteItem
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+        - oauth2Auth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Item deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        **JWT access token issued by WorkOS (User or M2M flow)**
+
+        **How to get this token:**
+
+        *M2M Flow (Service-to-Service):*
+        ```bash
+        curl -X POST "https://<your-authkit-domain>.authkit.app/oauth2/token" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "grant_type=client_credentials" \
+          -d "client_id=<m2m_client_id>" \
+          -d "client_secret=<m2m_client_secret>" \
+          -d "scope=read:items write:items"
+        ```
+
+        *User Flow (Manual):*
+        1. Complete browser login via `/api/v1/auth/login`
+        2. Extract token from browser DevTools → Application → Cookies → `access_token`
+
+        **How to use:**
+        ```
+        Authorization: Bearer <your-token-here>
+        ```
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: |
+        **JWT access token stored in httpOnly cookie (after browser login)**
+
+        **How to get this token:**
+        1. Visit `GET /api/v1/auth/login` in your browser
+        2. Complete WorkOS authentication
+        3. Token is automatically set in the `access_token` cookie
+
+        **How it works:**
+        - Cookie is httpOnly and secure (HTTPS only in production)
+        - Automatically sent by browser with each request
+        - Used for browser-based applications (SPAs, traditional web apps)
+
+        **Note:** For API testing with tools like curl/Postman, prefer the Bearer token method.
+    oauth2Auth:
+      type: oauth2
+      description: |
+        **OAuth2 Authorization Code Flow for Swagger UI**
+
+        Click "Authorize" in Swagger UI to:
+        1. Select the scopes you want to request
+        2. Complete WorkOS login in the popup
+        3. Swagger UI automatically stores and uses the token
+
+        **This is for interactive Swagger UI testing only.** For production apps:
+        - Browser apps: Use `/api/v1/auth/login` redirect flow
+        - M2M services: Use client_credentials flow directly with WorkOS
+      flows:
+        authorizationCode:
+          authorizationUrl: https://api.workos.com/user_management/authorize
+          tokenUrl: http://localhost:8080/api/v1/auth/token
+          scopes:
+            "read:items": "Read items - for demo GET /api/v1/demo/items"
+            "write:items": "Create and modify items - for demo POST /api/v1/demo/items"
+            "admin": "Admin access - for demo GET /api/v1/demo/admin/stats"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+      example:
+        message: "Invalid request"
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: JWT access token from WorkOS
+        refresh_token:
+          type: string
+          description: Refresh token from WorkOS
+        expires_in:
+          type: integer
+          description: Token lifetime in seconds
+        token_type:
+          type: string
+          enum: [Bearer]
+
+    User:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+      example:
+        email: "user@example.com"
+        firstName: "John"
+        lastName: "Doe"
+
+    DemoItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Mock item ID
+        name:
+          type: string
+          description: Mock item name
+
+    DemoPrincipal:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [user, service]
+          description: Principal type (user or service/M2M)
+        org_id:
+          type: string
+          nullable: true
+          description: Organization ID (present only for service principals)
+
+    DemoItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "3"
+        name:
+          type: string
+          example: "New Mock Item"
+        message:
+          type: string
+          example: "Item created (mock)"
+        principal:
+          $ref: '#/components/schemas/DemoPrincipal'
+
+    DemoItemsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemoItem'
+        principal:
+          $ref: '#/components/schemas/DemoPrincipal'
+
+    AdminStatsResponse:
+      type: object
+      properties:
+        total_users:
+          type: integer
+          example: 42
+        total_items:
+          type: integer
+          example: 1337
+        principal:
+          $ref: '#/components/schemas/DemoPrincipal'
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier
+        name:
+          type: string
+          description: Item name
+        arrivalDate:
+          type: string
+          format: date
+          nullable: true
+          description: Arrival date in YYYY-MM-DD format (company timezone)
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      example:
+        id: "550e8400-e29b-41d4-a716-446655440000"
+        name: "Example Item"
+        arrivalDate: "2024-02-15"
+        createdAt: "2024-01-15T10:30:00Z"
+
+    CreateItemRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Item name
+        arrivalDate:
+          type: string
+          pattern: "^[0-9]{8}$"
+          description: Arrival date in YYYYMMDD format (company timezone)
+      example:
+        name: "New Item"
+        arrivalDate: "20240215"

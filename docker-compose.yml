@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:17
+    container_name: boilerplate-postgres
+    environment:
+      POSTGRES_DB: boilerplate
+      POSTGRES_USER: boilerplate
+      POSTGRES_PASSWORD: boilerplate
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:latest
+    container_name: boilerplate-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["migrate"]
+    volumes:
+      - ./migrations:/migrations:ro
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://boilerplate:boilerplate@db:5432/boilerplate?sslmode=disable",
+      "up"
+    ]
+    restart: "no"
+
+  api:
+    image: golang:1.26
+    container_name: boilerplate-api
+    working_dir: /usr/src/app
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: boilerplate
+      DB_PASSWORD: boilerplate
+      DB_NAME: boilerplate
+      DB_SSLMODE: disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["go", "run", "./cmd/api"]
+    volumes:
+      - .:/usr/src/app
+    restart: unless-stopped
+
+volumes:
+  db_data:
