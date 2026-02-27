@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	wk "github.com/boilerplate-api/go-rest-api-starter/internal/clients/workos"
+	wk "github.com/DevBlobs/go-rest-api-starter/internal/clients/workos" // TODO give freedom to choose client
 )
 
 type Provider interface {

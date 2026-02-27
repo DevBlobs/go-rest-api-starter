@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/app"
+	"github.com/DevBlobs/go-rest-api-starter/internal/app"
 	"github.com/joho/godotenv"
 	"log/slog"
 )

@@ -12,10 +12,10 @@ type Handler struct {
 	validator validator.Validator
 }
 
-func NewHandler(svc Service) *Handler {
+func NewHandler(svc Service, vld validator.Validator) *Handler {
 	return &Handler{
 		svc:       svc,
-		validator: validator.NewValidator(),
+		validator: vld,
 	}
 }
 

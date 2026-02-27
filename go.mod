@@ -1,4 +1,4 @@
-module github.com/boilerplate-api/go-rest-api-starter
+module github.com/DevBlobs/go-rest-api-starter
 
 go 1.26.0
 
@@ -13,7 +13,6 @@ require (
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0

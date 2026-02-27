@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/postgres"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/postgres"
 )
 
 type Repository interface {

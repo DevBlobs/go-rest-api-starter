@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/postgres"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/postgres"
 	"github.com/jackc/pgx/v5"
 )
 

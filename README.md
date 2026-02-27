@@ -1,6 +1,8 @@
-# Boilerplate REST API
+# Boilerplate REST API [EXAMPLE]
 
-A production-ready REST API boilerplate built with Go 1.26, Echo web framework, and PostgreSQL.
+> **Note:** This is an example project for demonstration purposes.
+
+A REST API boilerplate built with Go 1.26, Echo web framework, and PostgreSQL.
 
 > This is a clean, frontend-agnostic REST API starter designed to work with **any HTTP client**. The complete API contract is defined in [OpenAPI 3.0 format](openapi/spec/openapi.yaml).
 
@@ -17,6 +19,8 @@ A production-ready REST API boilerplate built with Go 1.26, Echo web framework, 
 - **API Docs**: OpenAPI 3.0 specification with YAML endpoint
 
 ## Quick Start
+
+> **This is an example project** - use it as a reference for building your own REST API.
 
 ```bash
 # Clone and start the development stack

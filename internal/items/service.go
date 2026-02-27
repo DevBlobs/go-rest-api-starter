@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/shared/tz"
+	"github.com/DevBlobs/go-rest-api-starter/internal/shared/tz"
 )
 
 type Service interface {

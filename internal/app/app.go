@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/DevBlobs/go-rest-api-starter/internal/platform/validator"
 	"log/slog"
 	"net/http"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/auth"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/postgres"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/workos"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/demo"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/items"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/users"
-	"github.com/boilerplate-api/go-rest-api-starter/openapi/spec"
+	"github.com/DevBlobs/go-rest-api-starter/internal/auth"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/postgres"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/workos"
+	"github.com/DevBlobs/go-rest-api-starter/internal/demo"
+	"github.com/DevBlobs/go-rest-api-starter/internal/items"
+	"github.com/DevBlobs/go-rest-api-starter/internal/users"
+	"github.com/DevBlobs/go-rest-api-starter/openapi/spec"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -153,11 +154,12 @@ func NewApp(ctx context.Context, deps *ExternalDeps) (*App, error) {
 	registerAuth(api, authHandler)
 
 	// 8) Handlers
+	vld := validator.New()
 	protected := api.Group("", authMiddleware.RequireAuth)
 
 	registerProtectedAuth(protected, authHandler)
 
-	itemsHandler := items.NewHandler(itemsService)
+	itemsHandler := items.NewHandler(itemsService, vld)
 	itemsHandler.RegisterRoutes(protected)
 
 	demoHandler := demo.NewHandler()

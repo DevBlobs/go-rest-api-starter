@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/users"
+	"github.com/DevBlobs/go-rest-api-starter/internal/users"
 )
 
 type Opts struct {

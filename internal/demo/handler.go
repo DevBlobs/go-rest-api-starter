@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/auth"
+	"github.com/DevBlobs/go-rest-api-starter/internal/auth"
 	"github.com/labstack/echo/v4"
 )
 
