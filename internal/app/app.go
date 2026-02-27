@@ -13,6 +13,7 @@ import (
 	"github.com/DevBlobs/go-rest-api-starter/internal/clients/workos"
 	"github.com/DevBlobs/go-rest-api-starter/internal/demo"
 	"github.com/DevBlobs/go-rest-api-starter/internal/items"
+	"github.com/DevBlobs/go-rest-api-starter/internal/shared/tz"
 	"github.com/DevBlobs/go-rest-api-starter/internal/users"
 	"github.com/DevBlobs/go-rest-api-starter/openapi/spec"
 	"github.com/labstack/echo/v4"
@@ -101,6 +102,15 @@ func NewApp(ctx context.Context, deps *ExternalDeps) (*App, error) {
 	authCfg, err := auth.LoadFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load auth config: %w", err)
+	}
+
+	tzCfg, err := tz.LoadFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load timezone config: %w", err)
+	}
+
+	if err := tz.Init(tzCfg); err != nil {
+		return nil, fmt.Errorf("failed to init timezone: %w", err)
 	}
 
 	// 2) Auth provider

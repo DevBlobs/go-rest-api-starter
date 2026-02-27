@@ -3,18 +3,31 @@ package tz
 import (
 	"fmt"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
-const CompanyTimezone = "Asia/Tokyo"
+type Config struct {
+	Timezone string `envconfig:"COMPANY_TIMEZONE" required:"true"`
+}
 
 var location *time.Location
 
-func init() {
-	var err error
-	location, err = time.LoadLocation(CompanyTimezone)
-	if err != nil {
-		panic(fmt.Sprintf("failed to load timezone %s: %v", CompanyTimezone, err))
+func LoadFromEnv() (*Config, error) {
+	var cfg Config
+	if err := envconfig.Process("", &cfg); err != nil {
+		return nil, fmt.Errorf("failed to load timezone config: %w", err)
 	}
+	return &cfg, nil
+}
+
+func Init(cfg *Config) error {
+	var err error
+	location, err = time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return fmt.Errorf("failed to load timezone %s: %w", cfg.Timezone, err)
+	}
+	return nil
 }
 
 func ParseDate(s string) (time.Time, error) {
