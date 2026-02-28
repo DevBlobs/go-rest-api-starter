@@ -263,6 +263,9 @@ DB_SSLMODE=disable
 ### Documentation
 - `GET /health` - Health check
 - `GET /docs/openapi.yaml` - OpenAPI specification (YAML)
+- `GET /docs/index.html` - Swagger UI (interactive API documentation)
+
+> **Accessing Swagger UI:** Start the API with `make up`, then open http://localhost:8080/docs/index.html in your browser.
 
 ## Testing
 

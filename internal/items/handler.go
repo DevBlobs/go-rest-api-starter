@@ -3,7 +3,7 @@ package items
 import (
 	"net/http"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/platform/validator"
+	"github.com/DevBlobs/go-rest-api-starter/internal/platform/validator"
 	"github.com/labstack/echo/v4"
 )
 
