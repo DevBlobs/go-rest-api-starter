@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	pgclient "github.com/boilerplate-api/go-rest-api-starter/internal/clients/postgres"
+	pgclient "github.com/DevBlobs/go-rest-api-starter/internal/clients/postgres"
 )
 
 // ResetDB truncates all public tables with CASCADE to provide test isolation

@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pgclient "github.com/boilerplate-api/go-rest-api-starter/internal/clients/postgres"
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/workos"
+	pgclient "github.com/DevBlobs/go-rest-api-starter/internal/clients/postgres"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/workos"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,7 +21,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	appPkg "github.com/boilerplate-api/go-rest-api-starter/internal/app"
+	appPkg "github.com/DevBlobs/go-rest-api-starter/internal/app"
 )
 
 var (

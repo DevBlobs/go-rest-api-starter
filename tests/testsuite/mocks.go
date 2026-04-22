@@ -11,7 +11,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/boilerplate-api/go-rest-api-starter/internal/clients/workos"
+	"github.com/DevBlobs/go-rest-api-starter/internal/clients/workos"
 
 	"github.com/golang-jwt/jwt/v5"
 )

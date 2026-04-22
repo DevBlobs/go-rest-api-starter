@@ -113,69 +113,51 @@ func NewApp(ctx context.Context, deps *ExternalDeps) (*App, error) {
 		return nil, fmt.Errorf("failed to init timezone: %w", err)
 	}
 
-	// 2) Auth provider
-	authProvider := auth.NewProvider(deps.WorkOS)
-
-	// 3) HTTP server
+	// 2) HTTP server
 	e := newEcho(authCfg.AllowedOrigins)
 	registerHealthAndDocs(e)
 
 	api := e.Group("/api/v1")
 
-	// 4) DB
+	// 3) DB
 	pgPool, err := postgres.New(ctx, pgCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create postgres client: %w", err)
 	}
 
-	// 5) Repositories
-	itemsRepo := items.NewRepository(pgPool)
-	usersRepo := users.NewRepository(pgPool)
-
-	// 6) Services
-	itemsService := items.NewService(itemsRepo)
-	usersService := users.NewService(usersRepo)
-
-	// 7) Auth
-	authService := auth.NewService(authProvider, authCfg.RedirectURL, usersService)
-	jwtValidator, err := auth.NewJWTValidator(authService.JWKS())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create JWT validator: %w", err)
-	}
-
-	cookieCfg := auth.CookieCfg{Domain: authCfg.Domain}
-
-	authHandler := &auth.Handler{
-		Svc:         authService,
-		Cookie:      cookieCfg,
-		BaseURL:     authCfg.BaseURL,
-		StateSecret: authCfg.StateSecret,
-	}
-
-	authMiddleware := &auth.Middleware{
-		Svc:            authService,
-		Validator:      jwtValidator,
-		Cookie:         cookieCfg,
-		ClientID:       deps.WorkOSCfg.ClientID,
-		AllowedIssuers: deps.WorkOSCfg.Issuers,
-		Namespace:      deps.WorkOSCfg.Namespace,
-	}
-
-	registerAuth(api, authHandler)
-
-	// 8) Handlers
+	// 4) Initialize modules
 	vld := validator.New()
-	protected := api.Group("", authMiddleware.RequireAuth)
 
-	registerProtectedAuth(protected, authHandler)
+	usersModule := users.New(pgPool)
 
-	itemsHandler := items.NewHandler(itemsService, vld)
-	itemsHandler.RegisterRoutes(protected)
+	authModule, err := auth.New(auth.ModuleConfig{
+		Provider:        deps.WorkOS,
+		RedirectURL:     authCfg.RedirectURL,
+		BaseURL:         authCfg.BaseURL,
+		Domain:          authCfg.Domain,
+		StateSecret:     authCfg.StateSecret,
+		WorkOSClientID:  deps.WorkOSCfg.ClientID,
+		WorkOSIssuers:   deps.WorkOSCfg.Issuers,
+		WorkOSNamespace: deps.WorkOSCfg.Namespace,
+		UserService:     usersModule.Service,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth module: %w", err)
+	}
 
-	demoHandler := demo.NewHandler()
-	demoHandler.RegisterRoutes(protected.Group("/demo"))
+	itemsModule := items.New(pgPool, vld)
+	demoModule := demo.New()
 
-	// 9) App assembly
+	// 5) Register routes
+	registerAuth(api, authModule.Handler)
+
+	protected := api.Group("", authModule.Middleware.RequireAuth)
+	registerProtectedAuth(protected, authModule.Handler)
+
+	itemsModule.Handler.RegisterRoutes(protected)
+	demoModule.Handler.RegisterRoutes(protected.Group("/demo"))
+
+	// 6) App assembly
 	app := &App{
 		Echo: e,
 		Close: func(ctx context.Context) error {

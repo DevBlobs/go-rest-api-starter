@@ -32,7 +32,7 @@ func (s *serviceImpl) CreateItem(ctx context.Context, req CreateItemRequest) (*I
 	if req.ArrivalDate != "" {
 		parsedDate, err := tz.ParseDate(req.ArrivalDate)
 		if err != nil {
-			slog.Error("parse arrival date error:", err)
+			slog.Error("parse arrival date error", "error", err)
 			return nil, fmt.Errorf("parse arrival date: %w", err)
 		}
 		item.ArrivalDate = &parsedDate
@@ -40,7 +40,7 @@ func (s *serviceImpl) CreateItem(ctx context.Context, req CreateItemRequest) (*I
 
 	item, err := s.repo.Create(ctx, item)
 	if err != nil {
-		slog.Error("create item error:", err)
+		slog.Error("create item error", "error", err)
 		return nil, fmt.Errorf("create item: %w", err)
 	}
 	return &item, nil
@@ -49,7 +49,7 @@ func (s *serviceImpl) CreateItem(ctx context.Context, req CreateItemRequest) (*I
 func (s *serviceImpl) ListItems(ctx context.Context) ([]Item, error) {
 	items, err := s.repo.List(ctx)
 	if err != nil {
-		slog.Error("list items error:", err)
+		slog.Error("list items error", "error", err)
 		return nil, fmt.Errorf("list items: %w", err)
 	}
 	return items, nil
@@ -61,7 +61,7 @@ func (s *serviceImpl) GetItem(ctx context.Context, id string) (*Item, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		slog.Error("get item error:", err)
+		slog.Error("get item error", "error", err)
 		return nil, fmt.Errorf("get item: %w", err)
 	}
 	return &item, nil
@@ -73,7 +73,7 @@ func (s *serviceImpl) UpdateItem(ctx context.Context, id string, req UpdateItemR
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		slog.Error("update item error:", err)
+		slog.Error("update item error", "error", err)
 		return nil, fmt.Errorf("update item: %w", err)
 	}
 
@@ -82,7 +82,7 @@ func (s *serviceImpl) UpdateItem(ctx context.Context, id string, req UpdateItemR
 	if req.ArrivalDate != "" {
 		parsedDate, err := tz.ParseDate(req.ArrivalDate)
 		if err != nil {
-			slog.Error("parse arrival date error:", err)
+			slog.Error("parse arrival date error", "error", err)
 			return nil, fmt.Errorf("parse arrival date: %w", err)
 		}
 		item.ArrivalDate = &parsedDate
@@ -90,7 +90,7 @@ func (s *serviceImpl) UpdateItem(ctx context.Context, id string, req UpdateItemR
 
 	updated, err := s.repo.Update(ctx, item)
 	if err != nil {
-		slog.Error("update item error:", err)
+		slog.Error("update item error", "error", err)
 		return nil, fmt.Errorf("update item: %w", err)
 	}
 	return &updated, nil
@@ -102,7 +102,7 @@ func (s *serviceImpl) DeleteItem(ctx context.Context, id string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
-		slog.Error("delete item error:", err)
+		slog.Error("delete item error", "error", err)
 		return fmt.Errorf("delete item: %w", err)
 	}
 	return nil

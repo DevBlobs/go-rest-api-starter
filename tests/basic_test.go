@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/boilerplate-api/go-rest-api-starter/tests/testsuite"
+	"github.com/DevBlobs/go-rest-api-starter/tests/testsuite"
 )
 
 func TestIntegrations(t *testing.T) {

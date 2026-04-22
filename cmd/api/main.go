@@ -15,13 +15,13 @@ func main() {
 
 	externalDeps, err := app.BuildExternalDeps()
 	if err != nil {
-		slog.Error("Failed to build external dependencies:", err)
+		slog.Error("Failed to build external dependencies", "error", err)
 		return
 	}
 
 	application, err := app.NewApp(ctx, externalDeps)
 	if err != nil {
-		slog.Error("Failed to initialize app:", err)
+		slog.Error("Failed to initialize app", "error", err)
 		return
 	}
 	defer application.Close(ctx)
