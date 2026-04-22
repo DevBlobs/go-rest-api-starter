@@ -43,19 +43,23 @@ make build
 ```
 ├── cmd/api/              # Application entry point
 ├── internal/
-│   ├── app/              # Application bootstrap and DI wiring
+│   ├── app/              # Application bootstrap and module composition
 │   ├── auth/             # WorkOS authentication (JWT validation, middleware)
+│   │   └── module.go     # Module entry point
 │   ├── clients/          # External service clients
 │   │   ├── postgres/     # PostgreSQL client wrapper
 │   │   └── workos/       # WorkOS OAuth client
 │   ├── demo/             # Demo endpoints showing scope enforcement
+│   │   └── module.go     # Module entry point
 │   ├── items/            # Example domain (Item CRUD)
 │   │   ├── model.go      # Data models
 │   │   ├── repository.go # Data access layer
 │   │   ├── service.go    # Business logic
-│   │   └── handler.go    # HTTP handlers
+│   │   ├── handler.go    # HTTP handlers
+│   │   └── module.go     # Module entry point
 │   ├── platform/         # Platform utilities (logger, validator)
 │   └── users/            # User management (synced from WorkOS)
+│       └── module.go     # Module entry point
 ├── migrations/           # Database migrations
 ├── tests/                # Integration tests
 │   ├── testsuite/        # Test harness and mocks
@@ -75,6 +79,24 @@ Handler (HTTP) → Service (business logic) → Repository (data access)
 - **Handlers**: Echo route handlers that decode requests, call services, encode responses
 - **Services**: Business logic, validation, orchestrate repositories
 - **Repositories**: Database operations using pgx
+
+### Module Pattern
+
+Each domain exposes a `module.go` file that hides internal wiring:
+
+```go
+// internal/<domain>/module.go
+func New(db *postgres.Client, vld validator.Validator) *Module {
+    repo := NewRepository(db)      // Internal
+    svc := NewService(repo)         // Internal
+    handler := NewHandler(svc, vld) // Public
+    return &Module{Handler: handler}
+}
+```
+
+- **Internal components** (repository, service) are not exposed
+- **Public components** (Handler, Middleware) are exposed via the `Module` struct
+- **Cross-module dependencies** use interfaces defined by the consumer
 
 ### Authentication Flow
 
@@ -286,12 +308,25 @@ go test ./... -cover
 
 1. Create domain directory: `internal/<domain>/`
 2. Add `model.go`, `repository.go`, `service.go`, `handler.go`
-3. Create migration in `migrations/`
-4. Wire up in `internal/app/app.go`:
-   - Add repository initialization
-   - Add service initialization
-   - Add handler and routes
-5. Add integration tests in `tests/internal/<domain>/`
+3. Add `module.go` with a `New()` constructor that wires internal components:
+   ```go
+   // internal/<domain>/module.go
+   type Module struct {
+       Handler *Handler
+   }
+
+   func New(db *postgres.Client, vld validator.Validator) *Module {
+       repo := NewRepository(db)
+       svc := NewService(repo)
+       handler := NewHandler(svc, vld)
+       return &Module{Handler: handler}
+   }
+   ```
+4. Create migration in `migrations/`
+5. Wire up in `internal/app/app.go`:
+   - Initialize module with `<domain>.New(...)`
+   - Register routes: `module.Handler.RegisterRoutes(protected)`
+6. Add integration tests in `tests/internal/<domain>/`
 
 ## License
 
